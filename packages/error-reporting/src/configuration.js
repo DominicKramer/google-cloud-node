@@ -24,16 +24,16 @@ var isString = is.string;
 var isNumber = is.number;
 var version = require('../package.json').version;
 
-function maybeTransferAttribute(src, srcAttr, dest, destAttr, typeChecker,
-  description, transformer) {
+function getValue(src, srcAttr, defaultValue, typeChecker, description, transformer) {
   if (isObject(src)) {
     if (typeChecker(src[srcAttr])) {
       var value = src[srcAttr];
-      dest[destAttr] = transformer ? transformer(value) : value;
+      return transformer ? transformer(value) : value;
     } else if (has(src, srcAttr)) {
       throw new Error(description);
     }
   }
+  return defaultValue;
 }
 
 /**
@@ -87,16 +87,14 @@ function determineServiceContext(givenConfiguration) {
     version: isString(version) ? version : undefined
   };
 
-  maybeTransferAttribute(givenConfiguration.serviceContext,
-   'service',
-   result,
-   'service',
+  result.service = getValue(givenConfiguration.serviceContext, 'service',
+   result.service,
    isString,
    'config.serviceContext.service must be a string');
-  maybeTransferAttribute(givenConfiguration.serviceContext,
+
+  result.version = getValue(givenConfiguration.serviceContext,
     'version',
-    result,
-    'version',
+    result.version,
     isString,
     'config.serviceContext.version must be a string');
 
@@ -249,17 +247,15 @@ var Configuration = function(givenConfig, logger) {
  * @returns {Undefined} - does not return anything
  */
 Configuration.prototype._gatherLocalConfiguration = function() {
-  var target = {};
-  maybeTransferAttribute(this._givenConfiguration,
+  var ignoreEnvironmentCheck = getValue(this._givenConfiguration,
     'ignoreEnvironmentCheck',
-    target,
-    'ignoreEnvironmentCheck',
+    undefined,
     isBoolean,
     'config.ignoreEnvironmentCheck must be a boolean',
     function(value) {
       return !!value;
     });
-  this._shouldReportErrorsToAPI = target.ignoreEnvironmentCheck ||
+  this._shouldReportErrorsToAPI = ignoreEnvironmentCheck ||
     env.NODE_ENV === 'production';
   if (!this._shouldReportErrorsToAPI) {
     this._logger.warn([
@@ -269,16 +265,16 @@ Configuration.prototype._gatherLocalConfiguration = function() {
       'true in the runtime configuration object'
     ].join(' '));
   }
-  maybeTransferAttribute(this._givenConfiguration, 'key',
-    this, '_key',
+  this._key = getValue(this._givenConfiguration, 'key',
+    this._key,
     isString,
     'config.key must be a string');
-  maybeTransferAttribute(this._givenConfiguration, 'keyFilename',
-    this, '_keyFilename',
+  this._keyFilename = getValue(this._givenConfiguration, 'keyFilename',
+    this._keyFilename,
     isString,
     'config.keyFilename must be a string');
-  maybeTransferAttribute(this._givenConfiguration, 'credentials',
-    this, '_credentials',
+  this._credentials = getValue(this._givenConfiguration, 'credentials',
+    this._credentials,
     isObject,
     'config.credentials must be a valid credentials object');
 };
@@ -310,10 +306,8 @@ Configuration.prototype._checkLocalProjectId = function() {
     return this._projectId;
   }
 
-  maybeTransferAttribute(this._givenConfiguration,
-    'projectId',
-    this,
-    '_projectId',
+  this._projectId = getValue(this._givenConfiguration,
+    'projectId', this._projectId,
     function(value) {
       return isString(value) || isNumber(value);
     },
