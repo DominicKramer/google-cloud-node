@@ -24,6 +24,18 @@ var isString = is.string;
 var isNumber = is.number;
 var version = require('../package.json').version;
 
+function maybeTransferAttribute(src, srcAttr, dest, destAttr, typeChecker,
+  description, transformer) {
+  if (isObject(src)) {
+    if (typeChecker(src[srcAttr])) {
+      var value = src[srcAttr];
+      dest[destAttr] = transformer ? transformer(value) : value;
+    } else if (has(src, srcAttr)) {
+      throw new Error(description);
+    }
+  }
+}
+
 /**
  * The Configuration constructor function initializes several internal
  * properties on the Configuration instance and accepts a runtime-given
@@ -207,21 +219,18 @@ Configuration.prototype._checkLocalServiceContext = function() {
   this._serviceContext.service = isString(service) ? service : 'node';
   this._serviceContext.version = isString(version) ? version : undefined;
 
-  if (isObject(this._givenConfiguration.serviceContext)) {
-    if (isString(this._givenConfiguration.serviceContext.service)) {
-      this._serviceContext.service =
-        this._givenConfiguration.serviceContext.service;
-    } else if (has(this._givenConfiguration.serviceContext, 'service')) {
-      throw new Error('config.serviceContext.service must be a string');
-    }
-
-    if (isString(this._givenConfiguration.serviceContext.version)) {
-      this._serviceContext.version =
-        this._givenConfiguration.serviceContext.version;
-    } else if (has(this._givenConfiguration.serviceContext, 'version')) {
-      throw new Error('config.serviceContext.version must be a string');
-    }
-  }
+  maybeTransferAttribute(this._givenConfiguration.serviceContext,
+   'service',
+   this._serviceContext,
+   'service',
+   isString,
+   'config.serviceContext.service must be a string');
+  maybeTransferAttribute(this._givenConfiguration.serviceContext,
+    'version',
+    this._serviceContext,
+    'version',
+    isString,
+    'config.serviceContext.version must be a string');
 };
 /**
  * The _gatherLocalConfiguration function is responsible for determining
@@ -236,14 +245,18 @@ Configuration.prototype._checkLocalServiceContext = function() {
  * @returns {Undefined} - does not return anything
  */
 Configuration.prototype._gatherLocalConfiguration = function() {
-  if (this._givenConfiguration.ignoreEnvironmentCheck === true) {
-    this._shouldReportErrorsToAPI = true;
-  } else if (has(this._givenConfiguration, 'ignoreEnvironmentCheck') &&
-    !isBoolean(this._givenConfiguration.ignoreEnvironmentCheck)) {
-    throw new Error('config.ignoreEnvironmentCheck must be a boolean');
-  } else {
-    this._shouldReportErrorsToAPI = env.NODE_ENV === 'production';
-  }
+  var target = {};
+  maybeTransferAttribute(this._givenConfiguration,
+    'ignoreEnvironmentCheck',
+    target,
+    'ignoreEnvironmentCheck',
+    isBoolean,
+    'config.ignoreEnvironmentCheck must be a boolean',
+    function(value) {
+      return !!value;
+    });
+  this._shouldReportErrorsToAPI = target.ignoreEnvironmentCheck ||
+    env.NODE_ENV === 'production';
   if (!this._shouldReportErrorsToAPI) {
     this._logger.warn([
       'Stackdriver error reporting client has not been configured to send',
@@ -252,21 +265,18 @@ Configuration.prototype._gatherLocalConfiguration = function() {
       'true in the runtime configuration object'
     ].join(' '));
   }
-  if (isString(this._givenConfiguration.key)) {
-    this._key = this._givenConfiguration.key;
-  } else if (has(this._givenConfiguration, 'key')) {
-    throw new Error('config.key must be a string');
-  }
-  if (isString(this._givenConfiguration.keyFilename)) {
-    this._keyFilename = this._givenConfiguration.keyFilename;
-  } else if (has(this._givenConfiguration, 'keyFilename')) {
-    throw new Error('config.keyFilename must be a string');
-  }
-  if (isObject(this._givenConfiguration.credentials)) {
-    this._credentials = this._givenConfiguration.credentials;
-  } else if (has(this._givenConfiguration, 'credentials')) {
-    throw new Error('config.credentials must be a valid credentials object');
-  }
+  maybeTransferAttribute(this._givenConfiguration, 'key',
+    this, '_key',
+    isString,
+    'config.key must be a string');
+  maybeTransferAttribute(this._givenConfiguration, 'keyFilename',
+    this, '_keyFilename',
+    isString,
+    'config.keyFilename must be a string');
+  maybeTransferAttribute(this._givenConfiguration, 'credentials',
+    this, '_credentials',
+    isObject,
+    'config.credentials must be a valid credentials object');
 };
 /**
  * The _checkLocalProjectId function is responsible for determing whether the
@@ -295,13 +305,21 @@ Configuration.prototype._checkLocalProjectId = function() {
     // already has been set by the metadata service
     return this._projectId;
   }
-  if (has(this._givenConfiguration, 'projectId')) {
-    if (isString(this._givenConfiguration.projectId)) {
-      this._projectId = this._givenConfiguration.projectId;
-    } else if (isNumber(this._givenConfiguration.projectId)) {
-      this._projectId = this._givenConfiguration.projectId.toString();
-    }
-  }
+
+  maybeTransferAttribute(this._givenConfiguration,
+    'projectId',
+    this,
+    '_projectId',
+    function(value) {
+      return isString(value) || isNumber(value);
+    },
+    'config.serviceContext.projectId must be a string or a number',
+    function(value) {
+      if (isString(value)) {
+        return value;
+      }
+      return value.toString();
+    });
   return this._projectId;
 };
 /**
