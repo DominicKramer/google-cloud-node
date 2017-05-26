@@ -190,7 +190,10 @@ var Configuration = function(givenConfig, logger) {
    * @type {String|Null}
    * @defaultvalue null
    */
-  this._key = null;
+  this._key = this._key = getValue(this._givenConfiguration, 'key',
+    null,
+    isString,
+    'config.key must be a string');;
   /**
    * The _keyFilename property is meant to contain a path to a file containing
    * user or service account credentials, which will be used in place of
@@ -201,7 +204,10 @@ var Configuration = function(givenConfig, logger) {
    * @type {String|Null}
    * @defaultvalue null
    */
-  this._keyFilename = null;
+  this._keyFilename = getValue(this._givenConfiguration, 'keyFilename',
+    null,
+    isString,
+    'config.keyFilename must be a string');
   /**
    * The _credentials property is meant to contain an object representation of
    * user or service account credentials, which will be used in place of
@@ -212,7 +218,10 @@ var Configuration = function(givenConfig, logger) {
    * @type {Credentials|Null}
    * @defaultvalue null
    */
-  this._credentials = null;
+  this._credentials = getValue(this._givenConfiguration, 'credentials',
+    null,
+    isObject,
+    'config.credentials must be a valid credentials object');
   /**
    * The _serviceContext property is meant to contain the optional service
    * context information which may be given in the runtime configuration. If
@@ -265,18 +274,6 @@ Configuration.prototype._gatherLocalConfiguration = function() {
       'true in the runtime configuration object'
     ].join(' '));
   }
-  this._key = getValue(this._givenConfiguration, 'key',
-    this._key,
-    isString,
-    'config.key must be a string');
-  this._keyFilename = getValue(this._givenConfiguration, 'keyFilename',
-    this._keyFilename,
-    isString,
-    'config.keyFilename must be a string');
-  this._credentials = getValue(this._givenConfiguration, 'credentials',
-    this._credentials,
-    isObject,
-    'config.credentials must be a valid credentials object');
 };
 /**
  * The _checkLocalProjectId function is responsible for determing whether the
