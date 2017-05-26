@@ -37,6 +37,73 @@ function maybeTransferAttribute(src, srcAttr, dest, destAttr, typeChecker,
 }
 
 /**
+ * The _checkLocalServiceContext function is responsible for attempting to
+ * source the _serviceContext objects values from runtime configuration and the
+ * environment. First the function will check the env for known service context
+ * names, if these are not set then it will defer to the _givenConfiguration
+ * property if it is set on the instance. The function will check env variables
+ * `GAE_MODULE_NAME` and `GAE_MODULE_VERSION` for `_serviceContext.service` and
+ * `_serviceContext.version` respectively. If these are not set the
+ * `_serviceContext` properties will be left at default unless the given runtime
+ * configuration supplies any values as substitutes.
+ * @memberof Configuration
+ * @private
+ * @function _checkLocalServiceContext
+ * @returns {Undefined} - does not return anything
+ */
+function determineServiceContext(givenConfiguration) {
+  // Note: The GAE_MODULE_NAME environment variable is set on GAE.
+  //       If the code is, in particular, running on GCF, then the
+  //       FUNCTION_NAME environment variable is set.
+  //
+  // To determine the service name to use:
+  //   If the user specified a service name it should be used, otherwise
+  //   if the FUNCTION_NAME environment variable is set (indicating that the
+  //   code is running on GCF) then the FUNCTION_NAME value should be used as
+  //   the service name.  If neither of these conditions are true, the
+  //   value of the GAE_MODULE_NAME environment variable should be used as the
+  //   service name.
+  //
+  // To determine the service version to use:
+  //   If the user species a version, then that version will be used.
+  //   Otherwise, the value of the environment variable GAE_MODULE_VERSION
+  //   will be used if and only if the FUNCTION_NAME environment variable is
+  //   not set.
+  var service;
+  var version;
+
+  if (env.FUNCTION_NAME) {
+    service = env.FUNCTION_NAME;
+  } else if (env.GAE_SERVICE) {
+    service = env.GAE_SERVICE;
+    version = env.GAE_VERSION;
+  } else if (env.GAE_MODULE_NAME) {
+    service = env.GAE_MODULE_NAME;
+    version = env.GAE_MODULE_VERSION;
+  }
+
+  var result = {
+    service: isString(service) ? service : 'node',
+    version: isString(version) ? version : undefined
+  };
+
+  maybeTransferAttribute(givenConfiguration.serviceContext,
+   'service',
+   result,
+   'service',
+   isString,
+   'config.serviceContext.service must be a string');
+  maybeTransferAttribute(givenConfiguration.serviceContext,
+    'version',
+    result,
+    'version',
+    isString,
+    'config.serviceContext.version must be a string');
+
+  return result;
+}
+
+/**
  * The Configuration constructor function initializes several internal
  * properties on the Configuration instance and accepts a runtime-given
  * configuration object which may be used by the Configuration instance
@@ -58,6 +125,17 @@ function maybeTransferAttribute(src, srcAttr, dest, destAttr, typeChecker,
  *  been initialized.
  */
 var Configuration = function(givenConfig, logger) {
+  /**
+   * The _givenConfiguration property holds a ConfigurationOptions object
+   * which, if valid, will be merged against by the values taken from the meta-
+   * data service. If the _givenConfiguration property is not valid then only
+   * metadata values will be used in the Configuration instance.
+   * @memberof Configuration
+   * @private
+   * @type {Object|Null}
+   * @defaultvalue null
+   */
+  this._givenConfiguration = isObject(givenConfig) ? givenConfig : {};
   /**
    * The _logger property caches the logger instance created at the top-level
    * for configuration logging purposes.
@@ -146,7 +224,7 @@ var Configuration = function(givenConfig, logger) {
    * @private
    * @type {Object}
    */
-  this._serviceContext = {service: 'nodejs', version: ''};
+  this._serviceContext = determineServiceContext(this._givenConfiguration);
   /**
    * The _version of the Error reporting library that is currently being run.
    * This information will be logged in errors communicated to the Stackdriver
@@ -156,81 +234,7 @@ var Configuration = function(givenConfig, logger) {
    * @type {String}
    */
   this._version = version;
-  /**
-   * The _givenConfiguration property holds a ConfigurationOptions object
-   * which, if valid, will be merged against by the values taken from the meta-
-   * data service. If the _givenConfiguration property is not valid then only
-   * metadata values will be used in the Configuration instance.
-   * @memberof Configuration
-   * @private
-   * @type {Object|Null}
-   * @defaultvalue null
-   */
-  this._givenConfiguration = isObject(givenConfig) ? givenConfig : {};
-  this._checkLocalServiceContext();
   this._gatherLocalConfiguration();
-};
-/**
- * The _checkLocalServiceContext function is responsible for attempting to
- * source the _serviceContext objects values from runtime configuration and the
- * environment. First the function will check the env for known service context
- * names, if these are not set then it will defer to the _givenConfiguration
- * property if it is set on the instance. The function will check env variables
- * `GAE_MODULE_NAME` and `GAE_MODULE_VERSION` for `_serviceContext.service` and
- * `_serviceContext.version` respectively. If these are not set the
- * `_serviceContext` properties will be left at default unless the given runtime
- * configuration supplies any values as substitutes.
- * @memberof Configuration
- * @private
- * @function _checkLocalServiceContext
- * @returns {Undefined} - does not return anything
- */
-Configuration.prototype._checkLocalServiceContext = function() {
-  // Note: The GAE_MODULE_NAME environment variable is set on GAE.
-  //       If the code is, in particular, running on GCF, then the
-  //       FUNCTION_NAME environment variable is set.
-  //
-  // To determine the service name to use:
-  //   If the user specified a service name it should be used, otherwise
-  //   if the FUNCTION_NAME environment variable is set (indicating that the
-  //   code is running on GCF) then the FUNCTION_NAME value should be used as
-  //   the service name.  If neither of these conditions are true, the
-  //   value of the GAE_MODULE_NAME environment variable should be used as the
-  //   service name.
-  //
-  // To determine the service version to use:
-  //   If the user species a version, then that version will be used.
-  //   Otherwise, the value of the environment variable GAE_MODULE_VERSION
-  //   will be used if and only if the FUNCTION_NAME environment variable is
-  //   not set.
-  var service;
-  var version;
-
-  if (env.FUNCTION_NAME) {
-    service = env.FUNCTION_NAME;
-  } else if (env.GAE_SERVICE) {
-    service = env.GAE_SERVICE;
-    version = env.GAE_VERSION;
-  } else if (env.GAE_MODULE_NAME) {
-    service = env.GAE_MODULE_NAME;
-    version = env.GAE_MODULE_VERSION;
-  }
-
-  this._serviceContext.service = isString(service) ? service : 'node';
-  this._serviceContext.version = isString(version) ? version : undefined;
-
-  maybeTransferAttribute(this._givenConfiguration.serviceContext,
-   'service',
-   this._serviceContext,
-   'service',
-   isString,
-   'config.serviceContext.service must be a string');
-  maybeTransferAttribute(this._givenConfiguration.serviceContext,
-    'version',
-    this._serviceContext,
-    'version',
-    isString,
-    'config.serviceContext.version must be a string');
 };
 /**
  * The _gatherLocalConfiguration function is responsible for determining
